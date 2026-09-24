@@ -23,6 +23,7 @@ router.post('/:rideId/start', protect, rideController.startTrip);
 
 // POST /api/rides/:rideId/complete - Complete trip & finalize fare
 router.post('/:rideId/complete', protect, rideController.completeTrip);
+router.put('/:rideId/location', protect, rideController.updateLocation);
 
 // GET /api/rides/history - Separated completed & cancelled trip history
 router.get('/history', protect, rideController.getHistory);

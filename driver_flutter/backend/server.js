@@ -1,4 +1,6 @@
 const dns = require('dns');
+const http = require('http');
+const { Server } = require('socket.io');
 try {
   dns.setServers(['8.8.8.8', '1.1.1.1']);
 } catch (e) {}
@@ -23,7 +25,25 @@ const startServer = async () => {
   await connectDB();
 
   // 2. Start Express HTTP Server
-  const server = app.listen(PORT, () => {
+  const server = http.createServer(app);
+  const io = new Server(server, {
+    cors: { origin: '*', methods: ['GET', 'POST'] },
+  });
+  app.locals.io = io;
+  io.on('connection', (socket) => {
+    socket.on('driver:join', ({ driverId }) => {
+      if (driverId) socket.join(`driver:${driverId}`);
+    });
+    socket.on('driver:availability', ({ online }) => {
+      if (online) socket.join('drivers:online');
+      else socket.leave('drivers:online');
+    });
+    socket.on('ride:join', ({ rideId }) => {
+      if (rideId) socket.join(`ride:${rideId}`);
+    });
+    socket.on('support:join', () => socket.join('support:inbox'));
+  });
+  server.listen(PORT, '0.0.0.0', () => {
     console.log(`\n🚀 [Server] GoRush Driver Backend running on http://localhost:${PORT}`);
     console.log(`🩺 [Health] Health Check endpoint: http://localhost:${PORT}/api/health\n`);
   });

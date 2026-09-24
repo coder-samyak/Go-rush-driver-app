@@ -1,5 +1,14 @@
 const Ride = require('../models/ride.model');
 const Driver = require('../models/driver.model');
+const walletController = require('./wallet.controller');
+
+function emitRide(req, event, ride) {
+  const io = req.app.locals.io;
+  if (!io || !ride) return;
+  const payload = ride.toSafeObject();
+  io.to(`ride:${payload.rideId}`).emit(event, payload);
+  if (payload.driverId) io.to(`driver:${payload.driverId}`).emit(event, payload);
+}
 
 // Helper to generate unique ride ID
 function generateRideId() {
@@ -43,17 +52,23 @@ exports.getAvailableRide = async (req, res) => {
       }
     }
 
-    // Find any existing pending ride offer that is unassigned
-    let availableRide = await Ride.findOne({
-      status: 'requested',
-      driverId: null,
-    }).sort({ createdAt: -1 });
+    // Each offer is reserved to one driver before it reaches the device.
+    // Previously every online driver saw the same unassigned request; after
+    // one acceptance all other phones kept a stale card and got HTTP 409.
+    let availableRide = driverId
+      ? await Ride.findOne({
+          status: 'requested',
+          driverId: null,
+          offeredToDriverId: driverId,
+        }).sort({ createdAt: -1 })
+      : null;
 
     // If none exists, seed a realistic ride offer in MongoDB Atlas
     if (!availableRide) {
       availableRide = await Ride.create({
         rideId: generateRideId(),
         driverId: null,
+        offeredToDriverId: driverId,
         status: 'requested',
         passenger: {
           name: 'Priya Sharma',
@@ -90,6 +105,10 @@ exports.getAvailableRide = async (req, res) => {
         },
         requestedAt: new Date(),
       });
+      const io = req.app.locals.io;
+      if (io && driverId) {
+        io.to(`driver:${driverId}`).emit('ride:offer', availableRide.toSafeObject());
+      }
     }
 
     return res.status(200).json({
@@ -116,28 +135,68 @@ exports.acceptRide = async (req, res) => {
     const { rideId } = req.params;
     const driverId = req.driver._id;
 
-    // Find the ride by rideId or _id
-    const query = { $or: [{ rideId }, { _id: rideId.match(/^[0-9a-fA-F]{24}$/) ? rideId : null }] };
-    let ride = await Ride.findOne(query);
+    // --- WALLET BALANCE CHECK ---
+    // Before accepting, verify driver has minimum required balance.
+    // This is enforced server-side and cannot be bypassed by the app.
+    const walletCheck = await walletController.checkWalletBalance(driverId);
+    if (!walletCheck.allowed) {
+      return res.status(402).json({
+        success: false,
+        code: walletCheck.reason,
+        message:
+          walletCheck.reason === 'LOW_WALLET_BALANCE'
+            ? 'Please recharge your wallet to accept rides.'
+            : 'Your wallet is blocked. Please contact support.',
+        walletBalance: walletCheck.wallet ? walletCheck.wallet.balance : 0,
+        minimumRequiredBalance: walletCheck.config
+          ? walletCheck.config.minimumWalletBalance
+          : 100,
+        wallet: walletCheck.wallet || null,
+      });
+    }
+
+    // Atomically claim an unassigned request. This prevents two drivers (or a
+    // double tap) from racing a read-then-save update.
+    const identifiers = [{ rideId }];
+    if (/^[0-9a-fA-F]{24}$/.test(rideId)) identifiers.push({ _id: rideId });
+    let ride = await Ride.findOneAndUpdate(
+      {
+        $and: [
+          { $or: identifiers },
+          { status: 'requested' },
+          { driverId: null },
+          {
+            $or: [
+              { offeredToDriverId: driverId },
+              { offeredToDriverId: null },
+            ],
+          },
+        ],
+      },
+      { $set: { driverId, status: 'accepted', acceptedAt: new Date() } },
+      { new: true, runValidators: true }
+    );
 
     if (!ride) {
-      return res.status(404).json({
-        success: false,
-        message: 'Ride request not found',
-      });
-    }
-
-    if (ride.status !== 'requested' && String(ride.driverId) !== String(driverId)) {
+      const existing = await Ride.findOne({ $or: identifiers });
+      if (!existing) {
+        return res.status(404).json({ success: false, message: 'Ride request not found' });
+      }
+      // A retry from the driver that already won the claim is a successful,
+      // idempotent accept, not a failed ride action.
+      if (existing.status === 'accepted' && String(existing.driverId) === String(driverId)) {
+        return res.status(200).json({
+          success: true,
+          message: 'Ride already accepted successfully',
+          data: existing.toSafeObject(),
+        });
+      }
       return res.status(409).json({
         success: false,
-        message: 'This ride has already been accepted by another driver or cancelled',
+        message: 'This ride has already been accepted by another driver or is no longer available',
       });
     }
-
-    ride.driverId = driverId;
-    ride.status = 'accepted';
-    ride.acceptedAt = new Date();
-    await ride.save();
+    emitRide(req, 'ride:status', ride);
 
     // Mark driver status as busy/online
     await Driver.findByIdAndUpdate(driverId, { status: 'online' });
@@ -146,6 +205,7 @@ exports.acceptRide = async (req, res) => {
       success: true,
       message: 'Ride accepted successfully',
       data: ride.toSafeObject(),
+      wallet: walletCheck.wallet || null,
     });
   } catch (err) {
     console.error('acceptRide error:', err);
@@ -183,6 +243,7 @@ exports.rejectRide = async (req, res) => {
     ride.cancelledBy = 'driver';
     ride.cancellationReason = reason;
     await ride.save();
+    emitRide(req, 'ride:status', ride);
 
     return res.status(200).json({
       success: true,
@@ -216,6 +277,7 @@ exports.markArrived = async (req, res) => {
     ride.status = 'arrived';
     ride.arrivedAt = new Date();
     await ride.save();
+    emitRide(req, 'ride:status', ride);
 
     return res.status(200).json({
       success: true,
@@ -259,6 +321,7 @@ exports.startTrip = async (req, res) => {
     ride.status = 'in_progress';
     ride.startedAt = new Date();
     await ride.save();
+    emitRide(req, 'ride:status', ride);
 
     return res.status(200).json({
       success: true,
@@ -282,6 +345,7 @@ exports.startTrip = async (req, res) => {
 exports.completeTrip = async (req, res) => {
   try {
     const { rideId } = req.params;
+    const driverId = req.driver._id;
     const query = { $or: [{ rideId }, { _id: rideId.match(/^[0-9a-fA-F]{24}$/) ? rideId : null }] };
     const ride = await Ride.findOne(query);
 
@@ -289,15 +353,60 @@ exports.completeTrip = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Ride not found' });
     }
 
+    // Mark ride as completed first
     ride.status = 'completed';
     ride.completedAt = new Date();
     ride.fare.isPaid = true;
     await ride.save();
+    emitRide(req, 'ride:status', ride);
+
+    // --- WALLET COMPANY CHARGE DEDUCTION ---
+    // Process company charge atomically (idempotent — safe to retry).
+    // Only for CASH rides: driver collected cash from passenger, so we
+    // recover the company's share from their wallet.
+    // For ONLINE rides: payment gateway already handles the split.
+    const rideFare = ride.fare.total || 0;
+    const paymentMethod = ride.fare.paymentMethod || 'CASH';
+    const isCashRide = paymentMethod.toUpperCase().includes('CASH');
+
+    let walletResult = null;
+    if (rideFare > 0 && isCashRide) {
+      try {
+        walletResult = await walletController.processCompanyCharge(
+          driverId,
+          ride.rideId,
+          rideFare,
+          paymentMethod
+        );
+        if (!walletResult.success) {
+          console.error(`[Wallet] Company charge failed for ride ${ride.rideId}:`, walletResult.message);
+          // Do NOT block trip completion — log and continue
+          // The admin can manually reconcile insufficient wallet cases
+        }
+      } catch (walletErr) {
+        console.error('[Wallet] Unexpected error during company charge:', walletErr);
+        // Do NOT fail the trip completion — wallet error is non-blocking
+      }
+    }
+
+    // Build accounting summary
+    const companyCharge = walletResult && walletResult.companyCharge ? walletResult.companyCharge : 0;
+    const accounting = {
+      fare: rideFare,
+      paymentMethod,
+      companyCharge,
+      driverGrossEarning: rideFare,
+      driverNetEarning: parseFloat((rideFare - companyCharge).toFixed(2)),
+      walletDeduction: isCashRide ? companyCharge : 0,
+      accountingStatus: walletResult && walletResult.success ? 'SETTLED' : 'PENDING',
+    };
 
     return res.status(200).json({
       success: true,
       message: 'Trip completed successfully',
       data: ride.toSafeObject(),
+      wallet: walletResult && walletResult.wallet ? walletResult.wallet : null,
+      accounting,
     });
   } catch (err) {
     console.error('completeTrip error:', err);
@@ -306,6 +415,25 @@ exports.completeTrip = async (req, res) => {
       message: 'Server error completing trip',
       error: err.message,
     });
+  }
+};
+
+/** Persist a driver GPS heartbeat and broadcast it to ride listeners. */
+exports.updateLocation = async (req, res) => {
+  try {
+    const { rideId } = req.params;
+    const { lat, lng, accuracy } = req.body;
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+      return res.status(400).json({ success: false, message: 'lat and lng must be numbers' });
+    }
+    const ride = await Ride.findOne({ rideId, driverId: req.driver._id });
+    if (!ride) return res.status(404).json({ success: false, message: 'Active ride not found' });
+    ride.driverLocation = { lat, lng, accuracy: Number.isFinite(accuracy) ? accuracy : null, updatedAt: new Date() };
+    await ride.save();
+    emitRide(req, 'ride:location', ride);
+    return res.json({ success: true, data: ride.toSafeObject() });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: 'Unable to update location', error: err.message });
   }
 };
 

@@ -38,6 +38,7 @@ const register = async (req, res, next) => {
       licenseNumber,
       profileImage,
       vehicleId,
+      dateOfBirth,
       status,
     } = req.body;
 
@@ -68,6 +69,13 @@ const register = async (req, res, next) => {
         success: false,
         message: 'Password is required',
       });
+    }
+
+    const dob = dateOfBirth ? new Date(dateOfBirth) : null;
+    const age = dob && !Number.isNaN(dob.valueOf())
+      ? Math.floor((Date.now() - dob.valueOf()) / 31557600000) : 0;
+    if (!dob || age < 18) {
+      return res.status(400).json({ success: false, message: 'Driver must be at least 18 years old' });
     }
 
     // 2. Validate email format
@@ -111,6 +119,7 @@ const register = async (req, res, next) => {
       if (licenseNumber) driver.licenseNumber = licenseNumber.trim();
       if (profileImage) driver.profileImage = profileImage.trim();
       if (vehicleId) driver.vehicleId = vehicleId.trim();
+      driver.dateOfBirth = dob;
       driver.status = status || 'offline';
       await driver.save();
     } else {
@@ -122,6 +131,7 @@ const register = async (req, res, next) => {
         licenseNumber: licenseNumber ? licenseNumber.trim() : null,
         profileImage: profileImage ? profileImage.trim() : null,
         vehicleId: vehicleId ? vehicleId.trim() : null,
+        dateOfBirth: dob,
         status: status || 'offline',
       });
     }
@@ -274,7 +284,7 @@ const getProfile = async (req, res, next) => {
  */
 const updateProfile = async (req, res, next) => {
   try {
-    const { name, phone, email, city, address, licenseNumber, vehicleId, privacySettings, driverId: bodyDriverId } = req.body;
+    const { name, phone, email, city, address, licenseNumber, vehicleId, profileImage, privacySettings, documents, vehicleInsuranceDetails, driverInsuranceDetails, driverId: bodyDriverId } = req.body;
 
     let driver = null;
     const targetId = bodyDriverId || (req.driver && req.driver._id);
@@ -310,10 +320,56 @@ const updateProfile = async (req, res, next) => {
     if (address !== undefined) driver.address = address ? address.trim() : null;
     if (licenseNumber !== undefined) driver.licenseNumber = licenseNumber ? licenseNumber.trim() : null;
     if (vehicleId !== undefined) driver.vehicleId = vehicleId ? vehicleId.trim() : null;
+    if (profileImage !== undefined) driver.profileImage = profileImage ? profileImage.trim() : null;
     if (privacySettings && typeof privacySettings === 'object') {
       driver.privacySettings = {
         ...driver.privacySettings,
         ...privacySettings,
+      };
+    }
+    if (documents && typeof documents === 'object') {
+      driver.documents = { ...(driver.documents || {}), ...documents };
+    }
+    if (vehicleInsuranceDetails && typeof vehicleInsuranceDetails === 'object') {
+      if (vehicleInsuranceDetails.documentData &&
+          (typeof vehicleInsuranceDetails.documentData !== 'string' || vehicleInsuranceDetails.documentData.length > 10 * 1024 * 1024)) {
+        return res.status(400).json({ success: false, message: 'Insurance document must be smaller than 7 MB.' });
+      }
+      const expiryDate = vehicleInsuranceDetails.expiryDate
+        ? new Date(vehicleInsuranceDetails.expiryDate)
+        : null;
+      const isExpired = expiryDate && !Number.isNaN(expiryDate.valueOf()) && expiryDate < new Date();
+      driver.vehicleInsuranceDetails = {
+        ...(driver.vehicleInsuranceDetails || {}),
+        coverageAmount: vehicleInsuranceDetails.coverageAmount || 'Based on vehicle repair/damage assessment',
+        yearlyPackage: vehicleInsuranceDetails.yearlyPackage || null,
+        premiumAmount: vehicleInsuranceDetails.premiumAmount || null,
+        documentName: vehicleInsuranceDetails.documentName || driver.documents?.vehicleInsurance || null,
+        documentData: vehicleInsuranceDetails.documentData || driver.vehicleInsuranceDetails?.documentData || null,
+        policyNumber: vehicleInsuranceDetails.policyNumber || null,
+        insuranceCompany: vehicleInsuranceDetails.insuranceCompany || null,
+        startDate: vehicleInsuranceDetails.startDate || null,
+        expiryDate: expiryDate && !Number.isNaN(expiryDate.valueOf()) ? expiryDate : null,
+        // Verification is controlled by the backend/admin workflow. A driver
+        // upload is Pending unless its policy has already expired.
+        status: isExpired ? 'Expired' : (vehicleInsuranceDetails.status || 'Active'),
+        uploadedAt: new Date(),
+      };
+    }
+    if (driverInsuranceDetails && typeof driverInsuranceDetails === 'object') {
+      if (driverInsuranceDetails.documentData &&
+          (typeof driverInsuranceDetails.documentData !== 'string' || driverInsuranceDetails.documentData.length > 10 * 1024 * 1024)) {
+        return res.status(400).json({ success: false, message: 'Insurance document must be smaller than 7 MB.' });
+      }
+      const expiryDate = driverInsuranceDetails.expiryDate ? new Date(driverInsuranceDetails.expiryDate) : null;
+      const isExpired = expiryDate && !Number.isNaN(expiryDate.valueOf()) && expiryDate < new Date();
+      driver.driverInsuranceDetails = {
+        ...(driver.driverInsuranceDetails || {}),
+        ...driverInsuranceDetails,
+        documentData: driverInsuranceDetails.documentData || driver.driverInsuranceDetails?.documentData || null,
+        expiryDate: expiryDate && !Number.isNaN(expiryDate.valueOf()) ? expiryDate : null,
+        status: isExpired ? 'Expired' : (driverInsuranceDetails.status || 'Active'),
+        uploadedAt: new Date(),
       };
     }
 
@@ -357,10 +413,12 @@ const changePassword = async (req, res, next) => {
     }
 
     // 3. Validation: minimum length
-    if (newPassword.length < 6) {
+    // The driver app supports a 4+ character password/PIN. Keep the API
+    // validation aligned with registration and the Change Password screen.
+    if (newPassword.length < 4) {
       return res.status(400).json({
         success: false,
-        message: 'New password must be at least 6 characters long',
+        message: 'New password/PIN must be at least 4 characters long',
       });
     }
 
@@ -543,4 +601,3 @@ module.exports = {
   getVehicles,
   addVehicle,
 };
-

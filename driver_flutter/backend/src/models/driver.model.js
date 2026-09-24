@@ -43,6 +43,14 @@ const driverSchema = new mongoose.Schema(
       enum: ['offline', 'online', 'busy', 'suspended', 'inactive'],
       default: 'offline',
     },
+    // Updated by the driver's rating/review workflow. A missing rating is
+    // intentionally represented as 0 so incentives never award demo credit.
+    rating: {
+      type: Number,
+      min: 0,
+      max: 5,
+      default: 0,
+    },
     vehicleId: {
       type: String,
       default: null,
@@ -73,6 +81,46 @@ const driverSchema = new mongoose.Schema(
       backgroundLocation: { type: Boolean, default: true },
       twoFactorAuth: { type: Boolean, default: true },
       maskPhoneNumber: { type: Boolean, default: true },
+    },
+    dateOfBirth: { type: Date, default: null },
+    documents: {
+      profilePhoto: { type: String, default: null },
+      drivingLicense: { type: String, default: null },
+      vehicleRc: { type: String, default: null },
+      vehicleInsurance: { type: String, default: null },
+      policeVerification: { type: String, default: null },
+    },
+    vehicleInsuranceDetails: {
+      documentName: { type: String, default: null, trim: true },
+      // Stored for the driver's insurance upload but deliberately excluded
+      // from profile responses and normal queries.
+      documentData: { type: String, default: null },
+      policyNumber: { type: String, default: null, trim: true },
+      insuranceCompany: { type: String, default: null, trim: true },
+      coverageAmount: { type: String, default: 'Based on vehicle repair/damage assessment', trim: true },
+      yearlyPackage: { type: String, default: null, trim: true },
+      premiumAmount: { type: String, default: null, trim: true },
+      startDate: { type: Date, default: null },
+      expiryDate: { type: Date, default: null },
+      status: {
+        type: String,
+        enum: ['Pending', 'Verified', 'Active', 'Expired'],
+        default: 'Pending',
+      },
+      uploadedAt: { type: Date, default: null },
+    },
+    driverInsuranceDetails: {
+      documentName: { type: String, default: null, trim: true },
+      documentData: { type: String, default: null },
+      policyNumber: { type: String, default: null, trim: true },
+      insuranceCompany: { type: String, default: null, trim: true },
+      coverageAmount: { type: String, default: '₹5,00,000', trim: true },
+      yearlyPackage: { type: String, default: null, trim: true },
+      premiumAmount: { type: String, default: null, trim: true },
+      startDate: { type: Date, default: null },
+      expiryDate: { type: Date, default: null },
+      status: { type: String, enum: ['Pending', 'Verified', 'Active', 'Expired'], default: 'Pending' },
+      uploadedAt: { type: Date, default: null },
     },
   },
   {
@@ -115,6 +163,7 @@ driverSchema.methods.toSafeObject = function () {
     licenseNumber: driverObj.licenseNumber !== undefined ? driverObj.licenseNumber : null,
     profileImage: driverObj.profileImage !== undefined ? driverObj.profileImage : null,
     status: driverObj.status || 'offline',
+    rating: typeof driverObj.rating === 'number' ? driverObj.rating : 0,
     vehicleId: driverObj.vehicleId !== undefined ? driverObj.vehicleId : null,
     city: driverObj.city !== undefined ? driverObj.city : null,
     address: driverObj.address !== undefined ? driverObj.address : null,
@@ -125,6 +174,18 @@ driverSchema.methods.toSafeObject = function () {
       twoFactorAuth: true,
       maskPhoneNumber: true,
     },
+    dateOfBirth: driverObj.dateOfBirth || null,
+    documents: driverObj.documents || {},
+    vehicleInsuranceDetails: (() => {
+      const insurance = { ...(driverObj.vehicleInsuranceDetails || {}) };
+      delete insurance.documentData;
+      return insurance;
+    })(),
+    driverInsuranceDetails: (() => {
+      const insurance = { ...(driverObj.driverInsuranceDetails || {}) };
+      delete insurance.documentData;
+      return insurance;
+    })(),
     createdAt: driverObj.createdAt,
     updatedAt: driverObj.updatedAt,
   };

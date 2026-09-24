@@ -15,6 +15,14 @@ const rideSchema = new mongoose.Schema(
       default: null,
       index: true,
     },
+    // A requested ride is reserved for one driver before it is accepted.
+    // This prevents every online device receiving the same demo offer.
+    offeredToDriverId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Driver',
+      default: null,
+      index: true,
+    },
     passenger: {
       name: { type: String, required: true, default: 'Priya Sharma' },
       phone: { type: String, default: '+91 98765 43210' },
@@ -93,6 +101,12 @@ const rideSchema = new mongoose.Schema(
     cancellationReason: {
       type: String,
       default: null,
+    },
+    driverLocation: {
+      lat: { type: Number, default: null },
+      lng: { type: Number, default: null },
+      accuracy: { type: Number, default: null },
+      updatedAt: { type: Date, default: null },
     },
     cancelledBy: {
       type: String,
