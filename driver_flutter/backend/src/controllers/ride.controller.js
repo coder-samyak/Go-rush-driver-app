@@ -63,58 +63,10 @@ exports.getAvailableRide = async (req, res) => {
         }).sort({ createdAt: -1 })
       : null;
 
-    // If none exists, seed a realistic ride offer in MongoDB Atlas
-    if (!availableRide) {
-      availableRide = await Ride.create({
-        rideId: generateRideId(),
-        driverId: null,
-        offeredToDriverId: driverId,
-        status: 'requested',
-        passenger: {
-          name: 'Priya Sharma',
-          phone: '+91 98765 43210',
-          rating: 4.8,
-          totalRides: 120,
-          avatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150',
-          vehicleTier: 'Prime Sedan',
-        },
-        pickup: {
-          address: 'Sector 62, Noida',
-          area: 'Sector 62',
-          distanceAway: '2.1 km away',
-          lat: 28.6280,
-          lng: 77.3649,
-        },
-        destination: {
-          address: 'Connaught Place, New Delhi',
-          area: 'Connaught Place',
-          lat: 28.6328,
-          lng: 77.2197,
-        },
-        distanceKm: 16.4,
-        durationMin: 32,
-        otp: '4892',
-        fare: {
-          baseFare: 200,
-          distanceFare: 110,
-          taxes: 52,
-          total: 362,
-          driverEarnings: 310,
-          paymentMethod: 'Cash / UPI',
-          isPaid: false,
-        },
-        requestedAt: new Date(),
-      });
-      const io = req.app.locals.io;
-      if (io && driverId) {
-        io.to(`driver:${driverId}`).emit('ride:offer', availableRide.toSafeObject());
-      }
-    }
-
     return res.status(200).json({
       success: true,
-      message: 'Incoming ride request found',
-      data: availableRide.toSafeObject(),
+      message: availableRide ? 'Incoming ride request found' : 'No ride requests available',
+      data: availableRide ? availableRide.toSafeObject() : null,
     });
   } catch (err) {
     console.error('getAvailableRide error:', err);

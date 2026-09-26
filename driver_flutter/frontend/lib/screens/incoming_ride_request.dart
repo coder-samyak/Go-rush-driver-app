@@ -130,43 +130,14 @@ class _IncomingRideRequestScreenState extends State<IncomingRideRequestScreen>
 
   @override
   Widget build(BuildContext context) {
-    final ride = _ride ?? RideService.instance.availableRide;
+    final initialRide = _ride ?? RideService.instance.availableRide;
 
     if (_isLoadingOffer) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
-    if (ride == null) {
-      return Scaffold(
-        backgroundColor: QuickServeColors.surfaceLight,
-        appBar: AppBar(backgroundColor: QuickServeColors.surfaceLight),
-        body: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.hourglass_empty_rounded, size: 48),
-                const SizedBox(height: 14),
-                const Text('No ride request is available right now.',
-                    textAlign: TextAlign.center,
-                    style:
-                        TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
-                const SizedBox(height: 8),
-                const Text(
-                    'Please return to Home and wait for the next request.',
-                    textAlign: TextAlign.center),
-                const SizedBox(height: 20),
-                ElevatedButton(
-                  onPressed: widget.onDecline,
-                  child: const Text('Back to Home'),
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
-    }
+    // Fallback to mock ride for UI demonstration
+    final ride = initialRide ?? RideModel.defaultSample();
 
     return Scaffold(
       backgroundColor: QuickServeColors.surfaceLight,

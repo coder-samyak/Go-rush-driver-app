@@ -37,4 +37,22 @@ class NotificationService {
       debugPrint('[NotificationService] Platform channel not available — notification skipped.');
     }
   }
+
+  /// Show a heads-up notification for a new ride request.
+  Future<void> showNewRideRequestNotification() async {
+    try {
+      await _channel.invokeMethod('showNotification', {
+        'id': 2001,
+        'title': '🚗 New Ride Request Available!',
+        'body': 'Pickup at Sector 62, Noida ➔ Drop at Connaught Place, New Delhi. Tap to accept.',
+        'channelId': 'gorush_driver_status',
+        'channelName': 'Driver Status Alerts',
+        'importance': 4, // HIGH
+      });
+    } on PlatformException catch (e) {
+      debugPrint('[NotificationService] showNotification error: $e');
+    } on MissingPluginException {
+      debugPrint('[NotificationService] Platform channel not available — notification skipped.');
+    }
+  }
 }

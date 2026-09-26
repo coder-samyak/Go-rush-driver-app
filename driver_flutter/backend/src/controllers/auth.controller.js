@@ -9,7 +9,7 @@ const Driver = require('../models/driver.model');
  */
 const generateToken = (driverId, email) => {
   return jwt.sign(
-    { id: driverId, email },
+    { id: driverId, email, role: 'driver' },
     config.jwt.secret,
     { expiresIn: config.jwt.expiresIn || '7d' }
   );

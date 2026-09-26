@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -23,11 +24,30 @@ class _LiveRideMapState extends State<LiveRideMap> {
   final MapController _mapController = MapController();
   Position? _driverPosition;
   List<LatLng> _roadRoute = const [];
+  StreamSubscription<Position>? _locationSub;
 
   @override
   void initState() {
     super.initState();
     _loadDriverLocation();
+    _startLocationTracking();
+  }
+
+  @override
+  void dispose() {
+    _locationSub?.cancel();
+    _mapController.dispose();
+    super.dispose();
+  }
+
+  void _startLocationTracking() {
+    _locationSub = LocationService.instance.activeRidePositions().listen((position) {
+      if (!mounted) return;
+      setState(() {
+        _driverPosition = position;
+      });
+      _mapController.move(LatLng(position.latitude, position.longitude), _mapController.camera.zoom);
+    });
   }
 
   Future<void> _loadDriverLocation() async {

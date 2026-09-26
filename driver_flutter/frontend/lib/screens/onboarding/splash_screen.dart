@@ -1,12 +1,27 @@
 import 'package:flutter/material.dart';
 
-class SplashScreen extends StatelessWidget {
+class SplashScreen extends StatefulWidget {
   final VoidCallback? onGetStarted;
 
   const SplashScreen({
     super.key,
     this.onGetStarted,
   });
+
+  @override
+  State<SplashScreen> createState() => _SplashScreenState();
+}
+
+class _SplashScreenState extends State<SplashScreen> {
+  @override
+  void initState() {
+    super.initState();
+    Future.delayed(const Duration(milliseconds: 1500), () {
+      if (mounted && widget.onGetStarted != null) {
+        widget.onGetStarted!();
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -114,7 +129,7 @@ class SplashScreen extends StatelessWidget {
 
                     // Bottom CTA: Get Started
                     ElevatedButton(
-                      onPressed: onGetStarted,
+                      onPressed: widget.onGetStarted,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFF2864E8),
                         foregroundColor: Colors.white,

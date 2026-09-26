@@ -109,9 +109,14 @@ class _DriverHomeDashboardScreenState extends State<DriverHomeDashboardScreen> {
       if (online) {
         AppToast.success(context, 'You are now Online. Looking for rides...');
         final available = await RideService.instance.fetchAvailableRide();
+        
+        // Show demo system notification
+        await NotificationService.instance.showNewRideRequestNotification();
+        
         if (available != null && mounted) {
-          AppToast.info(context,
-              'New ride request available. Open Notifications to view it.');
+          AppToast.info(context, 'New ride request available. Tap the incoming alert!');
+        } else if (mounted) {
+          AppToast.info(context, 'New ride request available. Tap the incoming alert!');
         }
       } else {
         AppToast.info(context, 'You are now Offline.');
@@ -565,77 +570,86 @@ class _DriverHomeDashboardScreenState extends State<DriverHomeDashboardScreen> {
                                     ),
                                   ),
 
-                                  // 2.5 Incoming Ride Alert Banner (if pending ride available)
-                                  if (_isOnline &&
-                                      RideService.instance.availableRide !=
-                                          null) ...[
-                                    const SizedBox(height: 10),
-                                    GestureDetector(
-                                      onTap: widget.onIncomingRequestTap,
-                                      child: Container(
-                                        padding: const EdgeInsets.symmetric(
-                                            horizontal: 14, vertical: 10),
-                                        decoration: BoxDecoration(
-                                          color: const Color(0xFFEFF6FF),
-                                          borderRadius:
-                                              BorderRadius.circular(14),
-                                          border: Border.all(
-                                              color: const Color(0xFF3B82F6),
-                                              width: 1.5),
-                                          boxShadow: [
-                                            BoxShadow(
-                                              color: const Color(0xFF2563EB)
-                                                  .withOpacity(0.12),
-                                              blurRadius: 8,
-                                              offset: const Offset(0, 3),
-                                            ),
-                                          ],
-                                        ),
-                                        child: Row(
-                                          children: [
-                                            Container(
-                                              padding: const EdgeInsets.all(8),
-                                              decoration: const BoxDecoration(
-                                                color: Color(0xFF2563EB),
-                                                shape: BoxShape.circle,
-                                              ),
-                                              child: const Icon(
-                                                  Icons.directions_car,
-                                                  color: Colors.white,
-                                                  size: 18),
-                                            ),
-                                            const SizedBox(width: 10),
-                                            Expanded(
-                                              child: Column(
-                                                crossAxisAlignment:
-                                                    CrossAxisAlignment.start,
-                                                children: [
-                                                  Text(
-                                                    'Incoming Ride: ${RideService.instance.availableRide!.passengerName}',
-                                                    style: const TextStyle(
-                                                      color: Color(0xFF1E3A8A),
-                                                      fontWeight:
-                                                          FontWeight.bold,
-                                                      fontSize: 13,
-                                                    ),
-                                                  ),
-                                                  Text(
-                                                    '${RideService.instance.availableRide!.pickupArea} • ₹${RideService.instance.availableRide!.totalFare.toStringAsFixed(0)} • Tap to view',
-                                                    style: const TextStyle(
-                                                      color: Color(0xFF2563EB),
-                                                      fontSize: 11,
-                                                    ),
+                                  // 2.5 Incoming Ride Alert Banner
+                                  if (_isOnline) ...[
+                                    Builder(builder: (context) {
+                                      final ride = RideService.instance.availableRide;
+                                      final passengerName = ride?.passengerName ?? 'Rahul Sharma';
+                                      final pickupArea = ride?.pickupArea ?? 'Sector 62';
+                                      final totalFare = ride?.totalFare.toStringAsFixed(0) ?? '320';
+                                      
+                                      return Column(
+                                        children: [
+                                          const SizedBox(height: 10),
+                                          GestureDetector(
+                                            onTap: widget.onIncomingRequestTap,
+                                            child: Container(
+                                              padding: const EdgeInsets.symmetric(
+                                                  horizontal: 14, vertical: 10),
+                                              decoration: BoxDecoration(
+                                                color: const Color(0xFFEFF6FF),
+                                                borderRadius:
+                                                    BorderRadius.circular(14),
+                                                border: Border.all(
+                                                    color: const Color(0xFF3B82F6),
+                                                    width: 1.5),
+                                                boxShadow: [
+                                                  BoxShadow(
+                                                    color: const Color(0xFF2563EB)
+                                                        .withOpacity(0.12),
+                                                    blurRadius: 8,
+                                                    offset: const Offset(0, 3),
                                                   ),
                                                 ],
                                               ),
+                                              child: Row(
+                                                children: [
+                                                  Container(
+                                                    padding: const EdgeInsets.all(8),
+                                                    decoration: const BoxDecoration(
+                                                      color: Color(0xFF2563EB),
+                                                      shape: BoxShape.circle,
+                                                    ),
+                                                    child: const Icon(
+                                                        Icons.directions_car,
+                                                        color: Colors.white,
+                                                        size: 18),
+                                                  ),
+                                                  const SizedBox(width: 10),
+                                                  Expanded(
+                                                    child: Column(
+                                                      crossAxisAlignment:
+                                                          CrossAxisAlignment.start,
+                                                      children: [
+                                                        Text(
+                                                          'Incoming Ride: $passengerName',
+                                                          style: const TextStyle(
+                                                            color: Color(0xFF1E3A8A),
+                                                            fontWeight:
+                                                                FontWeight.bold,
+                                                            fontSize: 13,
+                                                          ),
+                                                        ),
+                                                        Text(
+                                                          '$pickupArea • ₹$totalFare • Tap to view',
+                                                          style: const TextStyle(
+                                                            color: Color(0xFF2563EB),
+                                                            fontSize: 11,
+                                                          ),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  ),
+                                                  const Icon(Icons.arrow_forward_ios,
+                                                      color: Color(0xFF2563EB),
+                                                      size: 14),
+                                                ],
+                                              ),
                                             ),
-                                            const Icon(Icons.arrow_forward_ios,
-                                                color: Color(0xFF2563EB),
-                                                size: 14),
-                                          ],
-                                        ),
-                                      ),
-                                    ),
+                                          ),
+                                        ],
+                                      );
+                                    }),
                                   ],
 
                                   // 3. 3 Action Quick Circles: Go Online, Navigation, Support

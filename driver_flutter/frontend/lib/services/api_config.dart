@@ -11,7 +11,7 @@ class ApiConfig {
   static const String _buildBaseUrl = String.fromEnvironment('API_BASE_URL');
 
   /// Primary LAN IP of the host machine running the backend (Windows PC)
-  static const String currentLanHost = '192.168.1.43';
+  static const String currentLanHost = '192.168.1.15';
 
   /// Optional custom base URL override for staging, testing, or custom deployments
   static String? customBaseUrl;

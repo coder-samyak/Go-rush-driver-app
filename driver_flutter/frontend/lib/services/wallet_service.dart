@@ -145,8 +145,7 @@ class WalletService extends ChangeNotifier {
   Map<String, String> get _headers => ApiConfig.getHeaders(token: _token);
 
   Duration _timeoutForCandidate(String base) {
-    if (base.startsWith('https://')) return const Duration(seconds: 20);
-    return const Duration(seconds: 15);
+    return const Duration(milliseconds: 1500);
   }
 
   Future<http.Response?> _getWithFallback(String path) async {

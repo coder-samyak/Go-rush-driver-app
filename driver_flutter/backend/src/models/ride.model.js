@@ -9,6 +9,12 @@ const rideSchema = new mongoose.Schema(
       trim: true,
       index: true,
     },
+    customerId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Customer',
+      default: null,
+      index: true,
+    },
     driverId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Driver',

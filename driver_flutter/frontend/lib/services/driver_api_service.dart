@@ -2,7 +2,7 @@ import 'package:dio/dio.dart';
 import '../models/models.dart';
 
 class DriverApiService {
-  static const String baseUrl = 'http://10.0.2.2:4000';
+  static const String baseUrl = 'http://192.168.1.15:5000';
   final Dio _dio = Dio(BaseOptions(
     baseUrl: baseUrl,
     connectTimeout: const Duration(seconds: 10),

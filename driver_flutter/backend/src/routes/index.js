@@ -8,6 +8,8 @@ const safetyRoutes = require('./safety.routes');
 const supportRoutes = require('./support.routes');
 const paymentRoutes = require('./payment.routes');
 const insuranceRoutes = require('./insurance.routes');
+const customerRoutes = require('./customer.routes');
+const customerRideRoutes = require('./customerRide.routes');
 
 // Mount health check route: GET /api/health
 router.use('/health', healthRoutes);
@@ -28,7 +30,12 @@ router.use('/driver', driverRoutes);
 router.use('/safety', safetyRoutes);
 router.use('/support', supportRoutes);
 
-// Backward-compatible v1 aliases
+// Customer APIs use an explicit namespace so the driver's legacy /v1/auth
+// routes remain backward-compatible.
+router.use('/v1/customer', customerRoutes);
+router.use('/v1/customer', customerRideRoutes);
+
+// Backward-compatible driver v1 aliases
 router.use('/v1/rides', rideRoutes);
 router.use('/v1/ride', rideRoutes);
 router.use('/v1/payment', paymentRoutes);
